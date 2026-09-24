@@ -15,6 +15,12 @@ export function formatNgn(amount: number): string {
   })}`;
 }
 
+/** Format a raw digit string for display inside an amount field: "150000" -> "150,000" */
+export function formatDigits(digits: string): string {
+  if (!digits) return "";
+  return Number(digits).toLocaleString("en-NG", { maximumFractionDigits: 0 });
+}
+
 export function formatUsdc(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }

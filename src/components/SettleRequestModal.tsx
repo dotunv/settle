@@ -3,12 +3,11 @@
 import { useState, useEffect } from "react";
 
 import { Group, MoneyRequest, Transaction } from "@/lib/types";
-import {
-  updateRequestStatus,
-  updateMemberBalance,
-  createTransaction,
-} from "@/lib/db";
-import { formatNgn, generateMockTxHash } from "@/lib/currency";
+import { updateRequestStatus, updateMemberBalance, createTransaction } from "@/lib/db";
+import { formatNgn, generateMockTxHash, getNgnRate } from "@/lib/currency";
+import { Sheet, SheetHeader, StepPanel } from "./ui/Sheet";
+import { Avatar, memberName } from "./ui/Avatar";
+import { ProcessingView, SuccessView, ErrorView } from "./ui/Status";
 
 interface SettleRequestModalProps {
   isOpen: boolean;
@@ -21,8 +20,6 @@ interface SettleRequestModalProps {
 
 type SettleStep = "confirm" | "sending" | "success" | "error";
 
-const DEMO_RATE = 1580;
-
 export function SettleRequestModal({
   isOpen,
   onClose,
@@ -31,6 +28,7 @@ export function SettleRequestModal({
   currentUserWallet,
   onSuccess,
 }: SettleRequestModalProps) {
+  const rate = getNgnRate();
   const [step, setStep] = useState<SettleStep>("confirm");
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [error, setError] = useState("");
@@ -38,14 +36,14 @@ export function SettleRequestModal({
   const requester = group.members.find(
     (m) => m.walletAddress.toLowerCase() === request.fromAddress.toLowerCase()
   );
-  const requesterName =
-    requester?.displayName || requester?.email || "them";
+  const requesterName = requester ? memberName(requester) : "them";
 
   const currentMember = group.members.find(
     (m) => m.walletAddress.toLowerCase() === currentUserWallet.toLowerCase()
   );
+  const myName = memberName(currentMember);
   const currentBalanceUsdc = parseFloat(currentMember?.balance.usdc || "0");
-  const currentBalanceNgn = currentBalanceUsdc * DEMO_RATE;
+  const currentBalanceNgn = currentBalanceUsdc * rate;
 
   const requestAmountUsdc = parseFloat(request.amountUsdc);
   const requestAmountNgn = parseFloat(request.amountNgn);
@@ -104,9 +102,7 @@ export function SettleRequestModal({
   };
 
   const handleClose = () => {
-    if (step === "success") {
-      onSuccess();
-    }
+    if (step === "success") onSuccess();
     setStep("confirm");
     setTransaction(null);
     setError("");
@@ -121,209 +117,85 @@ export function SettleRequestModal({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        {step === "confirm" && (
-          <ConfirmStep
-            requestAmountNgn={requestAmountNgn}
-            requesterName={requesterName}
-            note={request.note}
-            currentBalanceNgn={currentBalanceNgn}
-            hasEnoughBalance={hasEnoughBalance}
-            onPay={handlePay}
-            onDecline={handleDecline}
-            onClose={handleClose}
-          />
-        )}
+    <Sheet isOpen={isOpen} onClose={handleClose} label="Settle up" locked={step === "sending"}>
+      {step === "confirm" && (
+        <StepPanel stepKey="confirm">
+          <SheetHeader title="Settle up" onClose={handleClose} />
+          <div className="px-5 pb-5 pt-3">
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-coral-400 via-coral-500 to-fuchsia-600 p-6 text-center text-white shadow-glow-coral">
+              <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-sun-300/40 blur-2xl" />
+              <div className="relative mx-auto w-fit">
+                <Avatar name={requesterName} seed={requester?.walletAddress} size="lg" ring />
+              </div>
+              <p className="relative mt-4 text-sm font-medium text-white/85">{requesterName} asked you for</p>
+              <p className="tabular relative mt-1 font-display text-5xl font-extrabold tracking-tight">
+                {formatNgn(requestAmountNgn)}
+              </p>
+              {request.note && (
+                <p className="relative mx-auto mt-3 w-fit rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">
+                  {request.note}
+                </p>
+              )}
+            </div>
 
-        {step === "sending" && <SendingStep />}
+            <div className="mt-5 flex items-center justify-between rounded-2xl bg-cream px-4 py-3 text-sm">
+              <span className="text-ink-muted">Your balance</span>
+              <span className={`tabular font-bold ${hasEnoughBalance ? "text-ink" : "text-coral-700"}`}>
+                {formatNgn(currentBalanceNgn)}
+              </span>
+            </div>
 
-        {step === "success" && transaction && (
-          <SuccessStep
-            amountNgn={requestAmountNgn}
-            requesterName={requesterName}
-            onClose={handleClose}
-          />
-        )}
+            {!hasEnoughBalance && (
+              <p className="mt-3 text-center text-sm font-medium text-coral-700" role="alert">
+                You need {formatNgn(requestAmountNgn - currentBalanceNgn)} more to pay this.
+              </p>
+            )}
 
-        {step === "error" && (
-          <ErrorStep
-            error={error}
-            onRetry={() => setStep("confirm")}
-            onClose={handleClose}
-          />
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ConfirmStep({
-  requestAmountNgn,
-  requesterName,
-  note,
-  currentBalanceNgn,
-  hasEnoughBalance,
-  onPay,
-  onDecline,
-  onClose,
-}: {
-  requestAmountNgn: number;
-  requesterName: string;
-  note?: string;
-  currentBalanceNgn: number;
-  hasEnoughBalance: boolean;
-  onPay: () => void;
-  onDecline: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <>
-      <div className="flex items-center justify-between border-b border-gray-100 p-4">
-        <h2 className="text-lg font-semibold text-gray-900">Settle up</h2>
-        <button
-          onClick={onClose}
-          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 hover:bg-gray-100 hover:text-gray-600"
-        >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
-      <div className="p-4">
-        <div className="mb-6 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 p-6 text-center text-white">
-          <p className="mt-2 text-lg font-medium">
-            You owe {requesterName} {formatNgn(requestAmountNgn)}
-          </p>
-        </div>
-
-        {note && (
-          <div className="mb-4 rounded-lg bg-gray-50 p-4">
-            <p className="text-sm text-gray-600">For</p>
-            <p className="mt-1 font-medium text-gray-900">{note}</p>
+            <div className="mt-5 space-y-3">
+              <button type="button" onClick={handlePay} disabled={!hasEnoughBalance} className="btn-primary">
+                Pay {requesterName} {formatNgn(requestAmountNgn)}
+              </button>
+              <button type="button" onClick={handleDecline} className="btn-ghost">
+                Not now — decline
+              </button>
+            </div>
           </div>
-        )}
+        </StepPanel>
+      )}
 
-        <div className="mb-6 flex items-center justify-between rounded-lg bg-gray-50 p-3">
-          <span className="text-sm text-gray-600">Your balance</span>
-          <span className={`text-sm font-medium ${hasEnoughBalance ? "text-gray-900" : "text-red-600"}`}>
-            {formatNgn(currentBalanceNgn)}
-          </span>
-        </div>
-
-        {!hasEnoughBalance && (
-          <p className="mb-4 text-center text-sm text-red-600">
-            Not enough balance to pay this request
-          </p>
-        )}
-
-        <div className="space-y-3">
-          <button
-            onClick={onPay}
-            disabled={!hasEnoughBalance}
-            className="w-full rounded-xl bg-primary-600 py-4 text-base font-semibold text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            Mark as paid
-          </button>
-          <button
-            onClick={onDecline}
-            className="w-full rounded-xl border border-gray-200 py-3 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-          >
-            Decline
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function SendingStep() {
-  return (
-    <div className="p-8 text-center">
-      <div className="mx-auto mb-6 h-16 w-16">
-        <svg className="h-16 w-16 animate-spin text-primary-600" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+      {step === "sending" && (
+        <StepPanel stepKey="sending">
+          <ProcessingView
+            title={`Paying ${formatNgn(requestAmountNgn)}`}
+            subtitle={`Settling up with ${requesterName}…`}
+            from={<Avatar name={myName} seed={currentUserWallet} size="lg" />}
+            to={<Avatar name={requesterName} seed={requester?.walletAddress} size="lg" />}
           />
-        </svg>
-      </div>
-      <h3 className="text-lg font-semibold text-gray-900">Settling...</h3>
-      <p className="mt-2 text-sm text-gray-500">
-        This will only take a moment
-      </p>
-    </div>
-  );
-}
+        </StepPanel>
+      )}
 
-function SuccessStep({
-  requesterName,
-  onClose,
-}: {
-  amountNgn: number;
-  requesterName: string;
-  onClose: () => void;
-}) {
-  return (
-    <div className="p-6">
-      <div className="mb-6 text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h3 className="text-xl font-semibold text-gray-900">Settled with {requesterName}</h3>
-      </div>
+      {step === "success" && transaction && (
+        <StepPanel stepKey="success">
+          <SuccessView
+            title="All settled!"
+            actions={
+              <button type="button" onClick={handleClose} className="btn-primary">
+                Back to {group.name}
+              </button>
+            }
+          >
+            You paid {requesterName} <span className="tabular font-bold text-ink">{formatNgn(requestAmountNgn)}</span>
+            {request.note ? ` for ${request.note.toLowerCase()}` : ""}.
+          </SuccessView>
+        </StepPanel>
+      )}
 
-      <button
-        onClick={onClose}
-        className="w-full rounded-xl bg-primary-600 py-4 text-base font-semibold text-white transition-colors hover:bg-primary-700"
-      >
-        Back to group
-      </button>
-    </div>
-  );
-}
-
-function ErrorStep({
-  error,
-  onRetry,
-  onClose,
-}: {
-  error: string;
-  onRetry: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <div className="p-6 text-center">
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-        <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </div>
-      <h3 className="text-lg font-semibold text-gray-900">Something went wrong</h3>
-      <p className="mt-2 text-sm text-gray-500">{error}</p>
-
-      <div className="mt-6 space-y-3">
-        <button
-          onClick={onRetry}
-          className="w-full rounded-lg bg-primary-600 py-3 text-sm font-medium text-white hover:bg-primary-700"
-        >
-          Try again
-        </button>
-        <button
-          onClick={onClose}
-          className="w-full rounded-lg border border-gray-200 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
+      {step === "error" && (
+        <StepPanel stepKey="error">
+          <ErrorView message={error} onRetry={() => setStep("confirm")} onClose={handleClose} />
+        </StepPanel>
+      )}
+    </Sheet>
   );
 }
