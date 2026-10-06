@@ -19,6 +19,13 @@ export const metadata: Metadata = {
   title: "Settle - Shared Family Wallets",
   description:
     "Nigeria/Africa shared family wallets and remittance UX on Monad",
+  icons: {
+    icon: [
+      { url: "/brand/settle-mark-64.png", sizes: "64x64", type: "image/png" },
+      { url: "/brand/settle-mark-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/brand/settle-mark-192.png",
+  },
 };
 
 export const viewport: Viewport = {

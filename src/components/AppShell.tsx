@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -47,14 +48,16 @@ export function LoadingScreen() {
 }
 
 function Logo({ size = "md" }: { size?: "md" | "lg" }) {
-  const box = size === "lg" ? "h-14 w-14 rounded-[18px] text-3xl" : "h-9 w-9 rounded-xl text-lg";
+  const pixels = size === "lg" ? 56 : 36;
   return (
-    <span
-      aria-hidden="true"
-      className={`inline-flex items-center justify-center bg-ink font-display font-extrabold text-primary-400 shadow-card ${box}`}
-    >
-      ₦
-    </span>
+    <Image
+      src="/brand/settle-mark-192.png"
+      alt=""
+      width={pixels}
+      height={pixels}
+      priority
+      className="shrink-0"
+    />
   );
 }
 

@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791158400000,
+      "tag": "0001_protected_transfers",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791158460000,
+      "tag": "0002_testnet_faucet",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791158520000,
+      "tag": "0003_operations",
+      "breakpoints": true
+    }
+  ]
+}
