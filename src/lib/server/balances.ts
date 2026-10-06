@@ -12,12 +12,27 @@ export async function syncGroupBalances(db: ReturnType<typeof getDb>, groupId: s
   const tokenAddress = process.env.NEXT_PUBLIC_USDC_CONTRACT_ADDRESS as `0x${string}` | undefined;
   if (!tokenAddress || /^0x0{40}$/i.test(tokenAddress)) throw new ApiError(503, "USDC balance service is not configured");
   const client = getMonadPublicClient();
-  const balances = await Promise.all(members.map((member) => client.readContract({
-    address: tokenAddress,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: [member.walletAddress as `0x${string}`],
-  })));
+  let balances: bigint[];
+  try {
+    balances = await Promise.all(members.map((member) => client.readContract({
+      address: tokenAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [member.walletAddress as `0x${string}`],
+    })));
+  } catch (error) {
+    // Group data remains useful when an RPC provider is temporarily unavailable.
+    // Keep serving the last successfully persisted balances instead of failing the
+    // whole group request.
+    console.warn(JSON.stringify({
+      level: "warn",
+      event: "balance_sync_failed",
+      groupId,
+      error: error instanceof Error ? error.message : String(error),
+      timestamp: new Date().toISOString(),
+    }));
+    return members;
+  }
 
   let total = 0;
   for (let index = 0; index < members.length; index++) {

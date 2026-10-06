@@ -8,5 +8,6 @@ test("global security headers are configured", async () => {
   assert.equal(headers.get("X-Content-Type-Options"), "nosniff");
   assert.equal(headers.get("X-Frame-Options"), "DENY");
   assert.match(headers.get("Permissions-Policy"), /camera=\(\)/);
+  assert.equal(headers.get("Cross-Origin-Opener-Policy"), "same-origin-allow-popups");
   assert.equal(nextConfig.poweredByHeader, false);
 });

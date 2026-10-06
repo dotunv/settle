@@ -311,7 +311,7 @@ export function GroupDetail({
       )}
 
       {/* Demo balance */}
-      {isCreator && groupTotal === 0 && (
+      {process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === "true" && isCreator && groupTotal === 0 && (
         <section className="relative overflow-hidden rounded-[28px] border-2 border-dashed border-sun-400 bg-sun-100/60 p-5">
           <div className="flex items-start gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-sun-300 to-sun-500 text-ink">
